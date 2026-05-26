@@ -272,7 +272,8 @@ resource "aws_iam_role_policy" "lambda_inline" {
         Action = [
           "kms:Decrypt",
           "kms:Encrypt",
-          "kms:GenerateDataKey"
+          "kms:GenerateDataKey",
+          "kms:DescribeKey"
         ]
         Resource = aws_kms_key.phi.arn
       }
@@ -315,7 +316,7 @@ resource "aws_lambda_function" "intake" {
   }
 
   vpc_config {
-    subnet_ids         = aws_subnet.private[*].id
+    subnet_ids         = aws_subnet.public[*].id
     security_group_ids = [aws_security_group.lambda.id]
   }
 
