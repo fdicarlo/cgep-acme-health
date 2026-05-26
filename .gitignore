@@ -1,17 +1,18 @@
 # Terraform
-.terraform/
-.terraform.lock.hcl
+**/.terraform/*
 *.tfstate
 *.tfstate.*
-*.tfvars
-!terraform.tfvars.example
-tfplan
 *.tfplan
-crash.log
+.terraform.lock.hcl
 
-# Lambda build
-terraform/lambda/handler.zip
-
-# Local
-evidence/
+# macOS
 .DS_Store
+
+# Python
+__pycache__/
+.venv/
+
+# Local artifacts
+*.tar.gz
+*.sig.bundle
+receipt.json

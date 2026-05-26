@@ -38,6 +38,27 @@ locals {
 }
 
 ######################################################################
+# KMS — customer managed key for PHI-bearing data stores.
+# Closes GAP-01 and GAP-02 by bringing S3 uploads and DynamoDB under
+# customer-controlled cryptographic custody.
+######################################################################
+
+resource "aws_kms_key" "phi" {
+  description             = "CMK for Acme Health PHI workload"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+
+  tags = {
+    Name = "${local.name_prefix}-phi-key"
+  }
+}
+
+resource "aws_kms_alias" "phi" {
+  name          = "alias/${local.name_prefix}-phi-${local.suffix}"
+  target_key_id = aws_kms_key.phi.key_id
+}
+
+######################################################################
 # Networking — VPC the learner is expected to put the Lambda inside.
 # Two public + two private subnets across two AZs.
 ######################################################################
@@ -111,8 +132,10 @@ resource "aws_dynamodb_table" "intake" {
     type = "S"
   }
 
-  # No server_side_encryption block. Defaults to AWS-owned key.
-  # GAP-02: capstone learner expected to add this with a customer-owned key.
+  server_side_encryption {
+    enabled     = true
+    kms_key_arn = aws_kms_key.phi.arn
+  }
 }
 
 ######################################################################
@@ -132,9 +155,54 @@ resource "aws_s3_bucket" "uploads" {
   bucket = "${local.name_prefix}-uploads-${local.suffix}"
 }
 
-# (Intentionally omitted: SSE-KMS encryption with a customer CMK,
-#  bucket policy enforcing aws:SecureTransport, versioning, lifecycle.
-#  These are the gaps the learner closes.)
+resource "aws_s3_bucket_server_side_encryption_configuration" "uploads" {
+  bucket = aws_s3_bucket.uploads.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.phi.arn
+      sse_algorithm     = "aws:kms"
+    }
+  }
+}
+
+resource "aws_s3_bucket_versioning" "uploads" {
+  bucket = aws_s3_bucket.uploads.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+data "aws_iam_policy_document" "uploads_tls" {
+  statement {
+    sid    = "DenyInsecureTransport"
+    effect = "Deny"
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+
+    actions = ["s3:*"]
+
+    resources = [
+      aws_s3_bucket.uploads.arn,
+      "${aws_s3_bucket.uploads.arn}/*"
+    ]
+
+    condition {
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values   = ["false"]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "uploads_tls" {
+  bucket = aws_s3_bucket.uploads.id
+  policy = data.aws_iam_policy_document.uploads_tls.json
+}
 
 ######################################################################
 # Lambda — the intake handler.
@@ -167,7 +235,7 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-# GAP-07: deliberately broad permissions on the workload data stores.
+# GAP-07 remediation: least-privilege access to the workload data stores.
 resource "aws_iam_role_policy" "lambda_inline" {
   name = "intake-data-access"
   role = aws_iam_role.lambda.id
@@ -176,17 +244,53 @@ resource "aws_iam_role_policy" "lambda_inline" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect   = "Allow"
-        Action   = "dynamodb:*"
+        Sid    = "WriteSubmissions"
+        Effect = "Allow"
+        Action = [
+          "dynamodb:PutItem",
+          "dynamodb:GetItem"
+        ]
         Resource = aws_dynamodb_table.intake.arn
       },
       {
-        Effect   = "Allow"
-        Action   = "s3:*"
-        Resource = ["${aws_s3_bucket.uploads.arn}", "${aws_s3_bucket.uploads.arn}/*"]
+        Sid    = "WriteUploads"
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject"
+        ]
+        Resource = "${aws_s3_bucket.uploads.arn}/*"
+      },
+      {
+        Sid    = "UsePhiKmsKey"
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:Encrypt",
+          "kms:GenerateDataKey"
+        ]
+        Resource = aws_kms_key.phi.arn
       }
     ]
   })
+}
+
+resource "aws_security_group" "lambda" {
+  name        = "${local.name_prefix}-lambda-sg-${local.suffix}"
+  description = "Security group for patient intake Lambda"
+  vpc_id      = aws_vpc.main.id
+
+  egress {
+    description = "Allow outbound HTTPS for AWS service/API access"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "${local.name_prefix}-lambda-sg"
+  }
 }
 
 resource "aws_lambda_function" "intake" {
@@ -205,8 +309,10 @@ resource "aws_lambda_function" "intake" {
     }
   }
 
-  # GAP-05: no vpc_config block. Learner expected to add one referencing
-  # aws_subnet.private[*] and a hardened security group.
+  vpc_config {
+    subnet_ids         = aws_subnet.private[*].id
+    security_group_ids = [aws_security_group.lambda.id]
+  }
 }
 
 ######################################################################
@@ -233,11 +339,35 @@ resource "aws_apigatewayv2_route" "intake" {
   target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
 }
 
+resource "aws_cloudwatch_log_group" "api_access" {
+  name              = "/aws/apigateway/${local.name_prefix}-${local.suffix}"
+  retention_in_days = 30
+}
+
 resource "aws_apigatewayv2_stage" "default" {
   api_id      = aws_apigatewayv2_api.intake.id
   name        = "$default"
   auto_deploy = true
-  # GAP-08: no access_log_settings. Learner expected to wire CloudWatch logs.
+
+  default_route_settings {
+    throttling_burst_limit = 100
+    throttling_rate_limit  = 50
+  }
+
+  access_log_settings {
+    destination_arn = aws_cloudwatch_log_group.api_access.arn
+    format = jsonencode({
+      requestId        = "$context.requestId"
+      ip               = "$context.identity.sourceIp"
+      requestTime      = "$context.requestTime"
+      httpMethod       = "$context.httpMethod"
+      routeKey         = "$context.routeKey"
+      status           = "$context.status"
+      protocol         = "$context.protocol"
+      responseLength   = "$context.responseLength"
+      integrationError = "$context.integrationErrorMessage"
+    })
+  }
 }
 
 resource "aws_lambda_permission" "apigw" {
