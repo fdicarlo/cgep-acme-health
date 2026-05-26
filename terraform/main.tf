@@ -235,6 +235,11 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+resource "aws_iam_role_policy_attachment" "lambda_vpc_access" {
+  role       = aws_iam_role.lambda.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+}
+
 # GAP-07 remediation: least-privilege access to the workload data stores.
 resource "aws_iam_role_policy" "lambda_inline" {
   name = "intake-data-access"
@@ -313,7 +318,14 @@ resource "aws_lambda_function" "intake" {
     subnet_ids         = aws_subnet.private[*].id
     security_group_ids = [aws_security_group.lambda.id]
   }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.lambda_basic,
+    aws_iam_role_policy_attachment.lambda_vpc_access,
+    aws_iam_role_policy.lambda_inline
+  ]
 }
+
 
 ######################################################################
 # API Gateway — HTTP API in front of the Lambda.
