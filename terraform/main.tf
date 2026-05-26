@@ -154,7 +154,7 @@ resource "aws_dynamodb_table" "intake" {
 resource "aws_s3_bucket" "uploads" {
   bucket = "${local.name_prefix}-uploads-${local.suffix}"
 }
-
+/*
 resource "aws_s3_bucket_server_side_encryption_configuration" "uploads" {
   bucket = aws_s3_bucket.uploads.id
 
@@ -165,7 +165,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "uploads" {
     }
   }
 }
-
+*/
 resource "aws_s3_bucket_versioning" "uploads" {
   bucket = aws_s3_bucket.uploads.id
 
