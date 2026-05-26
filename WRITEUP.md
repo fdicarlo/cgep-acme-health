@@ -1,0 +1,1 @@
+The GitHub Actions role uses PowerUserAccess in the sandbox to support end-to-end deployment during the capstone. This was accepted as a time-boxed lab trade-off. In production, this would be replaced by a least-privilege deployment role scoped to the specific services used by the Patient Intake API and evidence pipeline.
