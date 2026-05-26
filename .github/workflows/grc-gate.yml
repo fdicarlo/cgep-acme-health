@@ -3,6 +3,8 @@ name: grc-gate
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -36,26 +38,32 @@ jobs:
       - name: Install OPA + Conftest
         run: |
           curl -L -o conftest.tar.gz \
-          https://github.com/open-policy-agent/conftest/releases/download/v0.50.0/conftest_0.50.0_Linux_x86_64.tar.gz
+            https://github.com/open-policy-agent/conftest/releases/download/v0.50.0/conftest_0.50.0_Linux_x86_64.tar.gz
 
           tar -xzf conftest.tar.gz
           sudo mv conftest /usr/local/bin/
 
           curl -L -o opa \
-          https://openpolicyagent.org/downloads/latest/opa_linux_amd64_static
+            https://openpolicyagent.org/downloads/latest/opa_linux_amd64_static
 
           chmod +x opa
           sudo mv opa /usr/local/bin/
 
+      - name: Install Cosign
+        if: always()
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: 'v2.2.4'
+
       - name: Terraform plan
-        working-directory: terraform
+        working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
           terraform init -input=false
           terraform validate
 
           terraform plan \
             -out=tfplan \
-            -no-color
+            -no-color | tee plan.txt
 
           terraform show -json tfplan > plan.json
 
@@ -65,7 +73,6 @@ jobs:
 
       - name: HIPAA policy gate
         run: |
-
           for ns in \
           compliance.hipaa.s3_kms \
           compliance.hipaa.dynamodb_kms \
@@ -81,3 +88,62 @@ jobs:
               --namespace "$ns" \
               terraform/plan.json
           done
+
+      - name: Terraform apply
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform apply -auto-approve tfplan
+
+      - name: Bundle + sign + upload evidence
+        if: always()
+        env:
+          VAULT: ${{ vars.EVIDENCE_VAULT }}
+          RUN_ID: ${{ github.run_id }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p evidence
+          cp terraform/plan.json evidence/plan.json
+          cp terraform/plan.txt evidence/plan.txt || true
+
+          BUNDLE="evidence-${RUN_ID}-${SHA}.tar.gz"
+          tar czf "${BUNDLE}" evidence/
+
+          shasum -a 256 "${BUNDLE}" | awk '{print $1}' > "${BUNDLE}.sha256"
+
+          cosign sign-blob --yes --bundle "${BUNDLE}.sig.bundle" "${BUNDLE}"
+
+          KEY_PREFIX="runs/${RUN_ID}"
+
+          aws s3 cp "${BUNDLE}" "s3://${VAULT}/${KEY_PREFIX}/${BUNDLE}"
+          aws s3 cp "${BUNDLE}.sha256" "s3://${VAULT}/${KEY_PREFIX}/${BUNDLE}.sha256"
+          aws s3 cp "${BUNDLE}.sig.bundle" "s3://${VAULT}/${KEY_PREFIX}/${BUNDLE}.sig.bundle"
+
+          VERSION_ID=$(aws s3api head-object \
+            --bucket "${VAULT}" \
+            --key "${KEY_PREFIX}/${BUNDLE}" \
+            --query VersionId \
+            --output text)
+
+          cat > receipt.json <<EOF
+          {
+            "run_id":"${RUN_ID}",
+            "vault":"${VAULT}",
+            "bundle_key":"${KEY_PREFIX}/${BUNDLE}",
+            "version_id":"${VERSION_ID}",
+            "sha256":"$(cat ${BUNDLE}.sha256)",
+            "commit":"${SHA}"
+          }
+          EOF
+
+          aws s3 cp receipt.json "s3://${VAULT}/${KEY_PREFIX}/receipt.json"
+
+      - name: Upload GitHub evidence artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: grc-evidence-${{ github.run_id }}
+          path: evidence/
+          retention-days: 90
