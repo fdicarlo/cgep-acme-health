@@ -49,7 +49,7 @@ The GitHub Actions workflow runs the full HIPAA gate across all namespaces.
 
 Submit the repo URL with the final commit SHA from `main`.
 
-Recent passing workflow run: <https://github.com/fdicarlo/cgep-acme-health/actions/runs/26498080213>
+Recent passing workflow run: <https://github.com/fdicarlo/cgep-acme-health/actions/runs/26506097199>
 
 Required PR history:
 
@@ -59,14 +59,14 @@ Required PR history:
 Signed evidence bundle:
 
 ```text
-s3://acme-health-intake-evidence-vault-d2514106/runs/26498080213/evidence-26498080213-260df8ee212073e165a536d33ee6b9e633015e7c.tar.gz
+s3://acme-health-intake-evidence-vault-7015c378/runs/26506097199/evidence-26506097199-b19830cf80df1219b377d4c689e51b6b4d8ba0de.tar.gz
 ```
 
 Verification facts:
 
-- SHA-256: `b6c7b1fb37819565f6bacfbf16d70036e3efdb4d07a18e4030b40b4517307f37`
+- SHA-256: `693df5e2ce2a8c57b410a469f1d477917dceb528e918d9e96ca65b3766de18d1`
 - Object Lock mode: `GOVERNANCE`
-- Retain until: `2026-06-26T07:51:15.421000+00:00`
+- Retain until: `2026-06-26T10:42:15.284000+00:00`
 
 ## Layout
 
