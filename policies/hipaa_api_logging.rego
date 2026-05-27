@@ -4,6 +4,7 @@
 #   framework: hipaa-security-rule
 #   controls: ["164.312(b)"]
 #   severity: medium
+#   remediation: "Configure aws_apigatewayv2_stage.default access_log_settings with a CloudWatch Logs destination and structured access log format."
 package compliance.hipaa.api_logging
 
 import rego.v1

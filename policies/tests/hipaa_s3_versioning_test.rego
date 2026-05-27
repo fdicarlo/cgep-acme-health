@@ -1,7 +1,7 @@
 package compliance.hipaa.s3_versioning_test
 
-import rego.v1
 import data.compliance.hipaa.s3_versioning
+import rego.v1
 
 compliant := {
 	"configuration": {"root_module": {"resources": [{
@@ -42,6 +42,14 @@ decoy_versioning := {
 	}]}},
 }
 
-test_compliant_passes if { count(s3_versioning.deny) == 0 with input as compliant }
-test_suspended_uploads_fails if { some msg in s3_versioning.deny with input as suspended_uploads; contains(msg, "164.308(a)(7)") }
-test_decoy_versioning_fails if { some msg in s3_versioning.deny with input as decoy_versioning; contains(msg, "164.308(a)(7)") }
+test_compliant_passes if count(s3_versioning.deny) == 0 with input as compliant
+
+test_suspended_uploads_fails if {
+	some msg in s3_versioning.deny with input as suspended_uploads
+	contains(msg, "164.308(a)(7)")
+}
+
+test_decoy_versioning_fails if {
+	some msg in s3_versioning.deny with input as decoy_versioning
+	contains(msg, "164.308(a)(7)")
+}

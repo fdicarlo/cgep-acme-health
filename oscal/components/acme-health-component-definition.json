@@ -3,7 +3,7 @@
     "uuid": "d89a0de9-f6f6-47df-91d8-098300f85d22",
     "metadata": {
       "title": "ACME Health Patient Intake API Component Definition",
-      "last-modified": "2026-05-27T00:00:00Z",
+        "last-modified": "2026-05-27T07:51:21Z",
       "version": "1.0.0",
       "oscal-version": "1.1.3",
       "props": [
@@ -108,7 +108,7 @@
                 "links": [
                   {
                     "rel": "evidence",
-                    "href": "s3://${EVIDENCE_VAULT}/runs/${GITHUB_RUN_ID}/",
+              "href": "s3://acme-health-intake-evidence-vault-d2514106/runs/26498080213/evidence-26498080213-260df8ee212073e165a536d33ee6b9e633015e7c.tar.gz",
                     "text": "Signed evidence bundle containing Terraform plan JSON, policy gate output, checksum, and Sigstore bundle."
                   }
                 ]
@@ -142,7 +142,7 @@
                 "links": [
                   {
                     "rel": "evidence",
-                    "href": "s3://${EVIDENCE_VAULT}/runs/${GITHUB_RUN_ID}/",
+              "href": "s3://acme-health-intake-evidence-vault-d2514106/runs/26498080213/evidence-26498080213-260df8ee212073e165a536d33ee6b9e633015e7c.tar.gz",
                     "text": "Signed evidence bundle containing Conftest evaluation for S3 TLS enforcement."
                   }
                 ]
@@ -180,7 +180,7 @@
                 "links": [
                   {
                     "rel": "evidence",
-                    "href": "s3://${EVIDENCE_VAULT}/runs/${GITHUB_RUN_ID}/",
+              "href": "s3://acme-health-intake-evidence-vault-d2514106/runs/26498080213/evidence-26498080213-260df8ee212073e165a536d33ee6b9e633015e7c.tar.gz",
                     "text": "Signed evidence bundle containing Terraform plan evidence for versioning and immutable evidence retention."
                   }
                 ]
@@ -218,7 +218,7 @@
                 "links": [
                   {
                     "rel": "evidence",
-                    "href": "s3://${EVIDENCE_VAULT}/runs/${GITHUB_RUN_ID}/",
+              "href": "s3://acme-health-intake-evidence-vault-d2514106/runs/26498080213/evidence-26498080213-260df8ee212073e165a536d33ee6b9e633015e7c.tar.gz",
                     "text": "Signed evidence bundle containing Conftest evaluation for least-privilege IAM."
                   }
                 ]
@@ -260,7 +260,7 @@
                 "links": [
                   {
                     "rel": "evidence",
-                    "href": "s3://${EVIDENCE_VAULT}/runs/${GITHUB_RUN_ID}/",
+              "href": "s3://acme-health-intake-evidence-vault-d2514106/runs/26498080213/evidence-26498080213-260df8ee212073e165a536d33ee6b9e633015e7c.tar.gz",
                     "text": "Signed evidence bundle containing Terraform plan, checksum, Sigstore bundle, and receipt JSON."
                   }
                 ]

@@ -9,7 +9,7 @@ This repository starts from the deliberately flawed `cgep-app-starter` workload 
 - Terraform baseline module for KMS, CloudTrail, and immutable evidence storage
 - HIPAA-primary and SOC 2-secondary OPA/Rego policy gates
 - GitHub Actions plan, policy, apply, evidence signing, and evidence upload workflow
-- OSCAL component definition mapping implemented controls to the selected frameworks
+- OSCAL component definition and HIPAA profile mapping implemented controls to the selected frameworks
 
 The inherited workload is intentionally small: API Gateway, Lambda, DynamoDB, S3, and VPC networking for a patient intake flow.
 
@@ -45,6 +45,29 @@ conftest test --policy policies --namespace compliance.hipaa.s3_kms terraform/pl
 
 The GitHub Actions workflow runs the full HIPAA gate across all namespaces.
 
+## Grading Evidence
+
+Recommended submission SHA: `260df8ee212073e165a536d33ee6b9e633015e7c`
+
+Recent passing workflow run: <https://github.com/fdicarlo/cgep-acme-health/actions/runs/26498080213>
+
+Required PR history:
+
+- Green PR: <https://github.com/fdicarlo/cgep-acme-health/pull/1>
+- Red PR: <https://github.com/fdicarlo/cgep-acme-health/pull/2>
+
+Signed evidence bundle:
+
+```text
+s3://acme-health-intake-evidence-vault-d2514106/runs/26498080213/evidence-26498080213-260df8ee212073e165a536d33ee6b9e633015e7c.tar.gz
+```
+
+Verification facts:
+
+- SHA-256: `b6c7b1fb37819565f6bacfbf16d70036e3efdb4d07a18e4030b40b4517307f37`
+- Object Lock mode: `GOVERNANCE`
+- Retain until: `2026-06-26T07:51:15.421000+00:00`
+
 ## Layout
 
 ```text
@@ -58,6 +81,7 @@ The GitHub Actions workflow runs the full HIPAA gate across all namespaces.
 ├── WORKLOAD.md
 ├── WRITEUP.md
 ├── oscal/components/
+├── oscal/profiles/
 ├── policies/
 ├── terraform/
 │   ├── baseline/

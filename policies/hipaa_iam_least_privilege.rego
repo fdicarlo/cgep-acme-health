@@ -4,6 +4,7 @@
 #   framework: hipaa-security-rule
 #   controls: ["164.312(a)(1)"]
 #   severity: critical
+#   remediation: "Replace wildcard DynamoDB/S3/KMS actions with the minimum PHI workload actions required by the Lambda function."
 package compliance.hipaa.iam_least_privilege
 
 import rego.v1

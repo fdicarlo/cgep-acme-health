@@ -4,6 +4,7 @@
 #   framework: hipaa-security-rule
 #   controls: ["164.312(e)(1)"]
 #   severity: high
+#   remediation: "Attach an aws_s3_bucket_policy to aws_s3_bucket.uploads that denies s3:* when aws:SecureTransport is false."
 package compliance.hipaa.s3_tls
 
 import rego.v1

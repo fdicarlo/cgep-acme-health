@@ -4,6 +4,7 @@
 #   framework: hipaa-security-rule
 #   controls: ["164.308(a)(7)"]
 #   severity: medium
+#   remediation: "Add aws_s3_bucket_versioning for aws_s3_bucket.uploads with status = Enabled."
 package compliance.hipaa.s3_versioning
 
 import rego.v1

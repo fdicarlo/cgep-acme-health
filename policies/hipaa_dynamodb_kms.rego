@@ -4,6 +4,7 @@
 #   framework: hipaa-security-rule
 #   controls: ["164.312(a)(2)(iv)"]
 #   severity: high
+#   remediation: "Configure aws_dynamodb_table.intake server_side_encryption with a customer-managed KMS key reference."
 package compliance.hipaa.dynamodb_kms
 
 import rego.v1

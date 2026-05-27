@@ -1,406 +1,92 @@
-# CGE-P Capstone Project – Compliance Engineering for ACME Health
+# CGE-P Capstone Write-Up: ACME Health Patient Intake
 
-## Project Overview
+This capstone declares the **HIPAA Security Rule** as the primary framework for ACME Health because the Patient Intake API processes Protected Health Information (PHI). **SOC 2 Trust Services Criteria** are used as a secondary mapping for customer assurance, but HIPAA drives the Terraform baseline, Rego policy suite, pipeline gate, OSCAL component, and evidence bundle.
 
-This capstone project implements a secure cloud-native Patient Intake API for a fictional healthcare provider (ACME Health) using Infrastructure-as-Code (IaC), Compliance-as-Code (CaC), and automated evidence generation.
+## Design Decisions
 
-The objective was not only to deploy infrastructure, but to build a system where security and compliance requirements become enforceable technical controls integrated directly into the deployment lifecycle.
+ACME Health is a small telehealth company with a working Patient Intake API that was not audit-defensible. I kept the starter workload intact and wrapped it with governance controls instead of rebuilding the application. The resulting system uses the starter VPC, API Gateway, Lambda, DynamoDB table, and S3 uploads bucket, then adds a Terraform baseline module for shared controls.
 
-The implementation demonstrates:
+The baseline module owns the governance resources:
 
-- Infrastructure provisioning through Terraform
-- HIPAA-aligned controls with selected SOC2 considerations
-- Compliance policies implemented through OPA/Rego
-- Automated policy enforcement through Conftest
-- GitHub Actions CI/CD with OIDC authentication
-- Signed evidence generation and storage
-- Prevention of non-compliant deployments
+- Customer-managed KMS key with rotation enabled
+- S3 evidence vault with Object Lock, versioning, SSE-KMS, public access blocking, and TLS denial
+- CloudTrail management trail with multi-region logging and log-file validation
 
----
+The root Terraform module owns the workload resources and consumes baseline outputs. That keeps the boundary clear: application infrastructure remains in the workload module, while reusable compliance controls live in `terraform/baseline`.
 
-# Business Scenario
+## Control Coverage
 
-ACME Health requires a cloud-hosted Patient Intake API to process healthcare information.
+| Gap | Remediation | HIPAA control | Evidence |
+|---|---|---|---|
+| S3 uploads encryption | `aws_s3_bucket_server_side_encryption_configuration.uploads` uses SSE-KMS with the baseline CMK. | `164.312(a)(2)(iv)` | `policies/hipaa_s3_kms.rego` |
+| DynamoDB encryption | `aws_dynamodb_table.intake` uses customer-managed KMS encryption. | `164.312(a)(2)(iv)` | `policies/hipaa_dynamodb_kms.rego` |
+| S3 TLS enforcement | `aws_s3_bucket_policy.uploads_tls` denies non-TLS requests using `aws:SecureTransport=false`. | `164.312(e)(1)` | `policies/hipaa_s3_tls.rego` |
+| S3 versioning | `aws_s3_bucket_versioning.uploads` enables object versioning. | `164.308(a)(7)` | `policies/hipaa_s3_versioning.rego` |
+| Lambda VPC placement | `aws_lambda_function.intake` has `vpc_config` attached to the starter VPC. | `164.312(e)(1)` | Terraform plan evidence |
+| Lambda IAM least privilege | `aws_iam_role_policy.lambda_inline` uses scoped DynamoDB, S3, and KMS actions. | `164.312(a)(1)` | `policies/hipaa_iam_least_privilege.rego` |
+| API logging/throttling | `aws_apigatewayv2_stage.default` has access logs and route throttling. | `164.312(b)` | `policies/hipaa_api_logging.rego` |
+| Evidence custody | Signed evidence bundles are uploaded to an Object Lock vault. | `164.312(b)` | S3 object retention and Cosign verification |
 
-The solution must:
+The policy suite has six HIPAA Rego policies and matching tests. Each policy cites the HIPAA control ID in the deny message and includes metadata for framework, controls, severity, and remediation.
 
-- Protect sensitive health information (PHI)
-- Ensure secure data handling
-- Maintain auditability
-- produce deployment evidence
-- prevent infrastructure drift
-- integrate compliance directly into engineering workflows
+## Pipeline
 
----
+The GitHub Actions workflow `.github/workflows/grc-gate.yml` runs one integrated flow:
 
-# Framework Selection
+1. Plan Terraform and emit `plan.json`.
+2. Run OPA unit tests and Conftest policy checks.
+3. Apply Terraform on pushes to `main`.
+4. Sign the evidence bundle with Cosign keyless signing through GitHub OIDC.
+5. Upload the signed bundle, checksum, signature bundle, and receipt to the Terraform-managed evidence vault.
 
-## Primary Framework: HIPAA
+The workflow uses GitHub OIDC to assume an AWS role, avoiding long-lived AWS credentials in GitHub secrets.
 
-HIPAA was selected as the primary framework because ACME Health processes healthcare information containing Protected Health Information (PHI).
+## Evidence
 
-Relevant HIPAA areas include:
+Recent successful evidence run:
 
-- Access controls
-- Encryption requirements
-- Audit logging
-- Transmission security
-- Data integrity protections
+- Run: `26498080213`
+- Commit: `260df8ee212073e165a536d33ee6b9e633015e7c`
+- Bundle: `s3://acme-health-intake-evidence-vault-d2514106/runs/26498080213/evidence-26498080213-260df8ee212073e165a536d33ee6b9e633015e7c.tar.gz`
+- Checksum: `s3://acme-health-intake-evidence-vault-d2514106/runs/26498080213/evidence-26498080213-260df8ee212073e165a536d33ee6b9e633015e7c.tar.gz.sha256`
+- Signature bundle: `s3://acme-health-intake-evidence-vault-d2514106/runs/26498080213/evidence-26498080213-260df8ee212073e165a536d33ee6b9e633015e7c.tar.gz.sig.bundle`
+- Receipt: `s3://acme-health-intake-evidence-vault-d2514106/runs/26498080213/receipt.json`
 
-Examples:
+Verification performed:
 
-- HIPAA §164.312(a)(2)(iv)
-- HIPAA §164.312(b)
-- HIPAA §164.312(e)
+- SHA-256 recompute matched: `b6c7b1fb37819565f6bacfbf16d70036e3efdb4d07a18e4030b40b4517307f37`
+- Cosign keyless verification returned `Verified OK`
+- S3 object metadata shows `ServerSideEncryption = aws:kms`
+- S3 Object Lock retention is active in `GOVERNANCE` mode until `2026-06-26T07:51:15.421000+00:00`
 
----
+## Gate Evidence
 
-## Secondary Framework: SOC2
+The repo history includes both required PR outcomes:
 
-SOC2 controls were used as supporting practices to strengthen operational security.
+- Green PR: [#1 HIPAA policy suite and Terraform controls](https://github.com/fdicarlo/cgep-acme-health/pull/1), merged after `grc-gate` succeeded.
+- Red PR: [#2 Intentional control failure validation](https://github.com/fdicarlo/cgep-acme-health/pull/2), closed with `grc-gate` failing as expected.
 
-Relevant Trust Service Criteria include:
+This demonstrates that compliant changes can merge while a reintroduced gap is blocked by the policy gate.
 
-- Security
-- Availability
-- Confidentiality
+## Trade-Offs
 
----
+The evidence vault uses `GOVERNANCE` mode rather than `COMPLIANCE` mode. For a 30-day capstone, governance mode provides immutable retention while still allowing privileged recovery if a lab mistake locks incorrect objects. In production, I would revisit whether compliance mode is required for audit evidence.
 
-# Architecture
+The deployment uses a single AWS account. A separate evidence account would provide stronger separation of duties and blast-radius reduction, but the single-account model keeps the capstone small and integrated.
 
-The implemented architecture includes:
+Lambda remains attached to public subnets because private-subnet placement previously caused runtime connectivity failures. Lambda ENIs do not receive public IPs, so this is not a complete long-term network pattern. A production-ready version should move Lambda to private subnets and add S3/DynamoDB VPC endpoints or NAT for AWS API access.
 
-### Networking
+The GitHub deployment role is broader than a production least-privilege role. For the capstone, the priority was proving the end-to-end control and evidence pipeline. A production sprint should reduce the deployment role to the exact Terraform action set.
 
-- Dedicated VPC
-- Public and private subnets
-- Internet Gateway
-- Route tables
-- Security groups
+## What I Would Do With Another Sprint
 
-### Application Layer
+- Move Lambda into private subnets with S3 and DynamoDB VPC endpoints.
+- Add WAF or an authorizer in front of the public API.
+- Add DynamoDB point-in-time recovery.
+- Split the evidence vault into a dedicated AWS account.
+- Add a script that verifies the latest S3 evidence object, checksum, Cosign bundle, and Object Lock retention in one command.
+- Validate OSCAL with `trestle` in CI.
 
-- API Gateway
-- Lambda function
-- DynamoDB storage
-- S3 uploads bucket
+## What I Did Not Get To
 
-### Security Components
-
-- Customer-managed KMS keys
-- IAM least privilege policies
-- TLS enforcement
-- S3 versioning
-- API logging
-- Evidence vault storage
-
----
-
-# Security Controls Implemented
-
-## S3 Encryption
-
-Requirement:
-
-Sensitive healthcare information must be encrypted at rest.
-
-Implementation:
-
-- SSE-KMS
-- Customer-managed KMS key
-
-Policy:
-
-```rego
-deny[msg] {
-    bucket_missing_kms
-}
-
-Mapped:
-
-HIPAA §164.312(a)(2)(iv)
-DynamoDB Encryption
-
-Requirement:
-
-Database records containing patient data require encryption.
-
-Implementation:
-
-Customer-managed KMS key
-
-Mapped:
-
-HIPAA §164.312(a)(2)(iv)
-TLS Enforcement
-
-Requirement:
-
-Traffic must be encrypted in transit.
-
-Implementation:
-
-Bucket policy denies insecure transport
-
-Mapped:
-
-HIPAA §164.312(e)
-Versioning
-
-Requirement:
-
-Prevent accidental data loss.
-
-Implementation:
-
-S3 versioning enabled
-
-Mapped:
-
-HIPAA integrity protections
-Least Privilege IAM
-
-Requirement:
-
-Limit access to required operations only.
-
-Implementation:
-
-Restricted Lambda permissions
-Minimal KMS permissions
-Explicit resource references
-
-Mapped:
-
-HIPAA access controls
-Audit Logging
-
-Requirement:
-
-Maintain audit trails.
-
-Implementation:
-
-API Gateway logging enabled
-CloudWatch logs
-
-Mapped:
-
-HIPAA §164.312(b)
-Compliance-as-Code Implementation
-
-Compliance requirements were translated into executable policies using:
-
-Open Policy Agent (OPA)
-Rego
-Conftest
-
-Implemented policy suites:
-
-HIPAA S3 KMS
-HIPAA DynamoDB KMS
-HIPAA TLS
-HIPAA Versioning
-HIPAA Least Privilege
-HIPAA API Logging
-Policy Testing
-
-Unit tests were created for all Rego policies.
-
-Examples:
-
-opa test -v policies/
-
-Results:
-
-PASS: 12/12
-Terraform Validation
-
-Terraform plans were converted into JSON:
-
-terraform show -json tfplan > plan.json
-
-Conftest validated infrastructure:
-
-conftest test \
---policy policies \
---namespace compliance.hipaa.s3_kms \
-terraform/plan.json
-CI/CD Pipeline
-
-GitHub Actions workflow implemented:
-
-Checkout repository
-Authenticate through AWS OIDC
-Terraform validation
-Terraform planning
-OPA tests
-HIPAA policy validation
-Terraform apply (main branch only)
-Evidence generation
-Cosign signing
-Evidence upload
-OIDC Authentication
-
-Static AWS credentials were intentionally avoided.
-
-GitHub Actions assumed an AWS role using:
-
-OpenID Connect (OIDC)
-short-lived credentials
-least persistent secrets
-
-Advantages:
-
-Reduced credential exposure
-no secret rotation requirements
-improved security posture
-Evidence Generation
-
-The pipeline automatically generated:
-
-Terraform plan output
-Plan JSON
-Evidence archive
-SHA256 checksum
-Cosign signature bundle
-Receipt metadata
-
-Evidence was uploaded to:
-
-S3 Evidence Vault
-
-Evidence structure:
-
-runs/
- └── RUN_ID/
-      ├── evidence.tar.gz
-      ├── evidence.tar.gz.sha256
-      ├── evidence.tar.gz.sig.bundle
-      └── receipt.json
-Validation of Policy Enforcement
-
-To demonstrate enforcement capability, an intentional non-compliant change was introduced.
-
-Removed:
-
-S3 KMS encryption
-
-Expected result:
-
-Policy violation
-
-Observed result:
-
-FAIL:
-uploads bucket must use SSE-KMS with customer-managed key
-
-Repository history therefore demonstrates:
-
-PR #1:
-
-Compliant implementation
-Merged successfully
-
-PR #2:
-
-Intentional policy violation
-Blocked automatically
-
-This validates that the controls actively prevent non-compliant infrastructure.
-
-Challenges Encountered
-
-Several real-world implementation issues occurred during development:
-
-Terraform provider initialization
-
-Issue:
-
-Missing required provider
-
-Resolution:
-
-terraform init
-AWS SecurityHub subscription issues
-
-Issue:
-
-SubscriptionRequiredException
-
-Resolution:
-
-Enabled required service subscriptions.
-
-GCP organization vs project policy permissions
-
-Issue:
-
-Role assignment at incorrect resource level.
-
-Resolution:
-
-Applied permissions at organization scope.
-
-Lambda VPC networking
-
-Issue:
-
-Lambda execution failures caused by missing ENI permissions.
-
-Resolution:
-
-Added:
-
-AWSLambdaVPCAccessExecutionRole
-GitHub OIDC permissions
-
-Issue:
-
-Insufficient permissions during Terraform apply.
-
-Resolution:
-
-Expanded deployment role permissions for the lab environment.
-
-AWS VPC quota limits
-
-Issue:
-
-Repeated failed deployments created multiple partially provisioned VPCs.
-
-Resolution:
-
-Manual cleanup of unused VPC resources.
-
-Trade-offs
-
-Several design decisions were made to keep the capstone achievable:
-
-Decision	Trade-off
-PowerUserAccess on deployment role	Faster implementation but broader permissions
-Public subnet Lambda placement	Reduced networking complexity
-Manual VPC cleanup	Simplified quota recovery
-
-For production environments these would be replaced with:
-
-strict least privilege deployment roles
-NAT gateways or VPC endpoints
-automated cleanup workflows
-Key Lessons Learned
-
-This project demonstrated that:
-
-Compliance requirements can be converted into executable controls
-Security policies can become deployment gates
-Evidence generation can be automated
-OIDC reduces credential management risk
-Infrastructure and compliance engineering can be integrated into one workflow
-Conclusion
-
-The capstone successfully implemented an end-to-end compliance engineering workflow where:
-
-Regulation → Control → Policy → Infrastructure → Pipeline → Evidence
-
-The resulting platform prevents non-compliant deployments while automatically generating signed deployment evidence suitable for auditing and future governance activities.
+This submission does not claim full SOC 2 or CMMC implementation. SOC 2 mappings are present as secondary context, and CMMC remains reference material only. The implemented control set is deliberately focused on HIPAA-relevant starter gaps and on proving an auditable deployment pipeline.

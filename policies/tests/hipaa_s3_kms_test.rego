@@ -1,7 +1,7 @@
 package compliance.hipaa.s3_kms_test
 
-import rego.v1
 import data.compliance.hipaa.s3_kms
+import rego.v1
 
 compliant := {
 	"configuration": {"root_module": {"resources": [
@@ -16,23 +16,19 @@ compliant := {
 			"expressions": {"bucket": {"references": ["aws_s3_bucket.uploads.id"]}},
 		},
 	]}},
-	"planned_values": {"root_module": {"resources": [
-		{
-			"address": "aws_s3_bucket_server_side_encryption_configuration.uploads",
-			"type": "aws_s3_bucket_server_side_encryption_configuration",
-			"values": {"rule": [{"apply_server_side_encryption_by_default": [{"sse_algorithm": "aws:kms"}]}]},
-		},
-	]}},
+	"planned_values": {"root_module": {"resources": [{
+		"address": "aws_s3_bucket_server_side_encryption_configuration.uploads",
+		"type": "aws_s3_bucket_server_side_encryption_configuration",
+		"values": {"rule": [{"apply_server_side_encryption_by_default": [{"sse_algorithm": "aws:kms"}]}]},
+	}]}},
 }
 
 noncompliant := {
-	"configuration": {"root_module": {"resources": [
-		{
-			"address": "aws_s3_bucket.uploads",
-			"type": "aws_s3_bucket",
-			"name": "uploads",
-		},
-	]}},
+	"configuration": {"root_module": {"resources": [{
+		"address": "aws_s3_bucket.uploads",
+		"type": "aws_s3_bucket",
+		"name": "uploads",
+	}]}},
 	"planned_values": {"root_module": {"resources": []}},
 }
 

@@ -1,7 +1,7 @@
 package compliance.hipaa.dynamodb_kms_test
 
-import rego.v1
 import data.compliance.hipaa.dynamodb_kms
+import rego.v1
 
 compliant := {
 	"configuration": {"root_module": {"resources": [{
@@ -42,6 +42,14 @@ missing_sse := {
 	}]}},
 }
 
-test_compliant_passes if { count(dynamodb_kms.deny) == 0 with input as compliant }
-test_aws_managed_key_fails if { some msg in dynamodb_kms.deny with input as aws_managed_key; contains(msg, "164.312(a)(2)(iv)") }
-test_missing_sse_fails if { some msg in dynamodb_kms.deny with input as missing_sse; contains(msg, "164.312(a)(2)(iv)") }
+test_compliant_passes if count(dynamodb_kms.deny) == 0 with input as compliant
+
+test_aws_managed_key_fails if {
+	some msg in dynamodb_kms.deny with input as aws_managed_key
+	contains(msg, "164.312(a)(2)(iv)")
+}
+
+test_missing_sse_fails if {
+	some msg in dynamodb_kms.deny with input as missing_sse
+	contains(msg, "164.312(a)(2)(iv)")
+}

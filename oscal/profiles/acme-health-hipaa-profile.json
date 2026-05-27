@@ -1,0 +1,30 @@
+{
+  "profile": {
+    "uuid": "a1ec1a5a-cd74-46fd-8c88-83729f4dd031",
+    "metadata": {
+      "title": "ACME Health HIPAA Security Rule Capstone Profile",
+      "last-modified": "2026-05-27T07:51:21Z",
+      "version": "1.0.0",
+      "oscal-version": "1.1.3"
+    },
+    "imports": [
+      {
+        "href": "https://csrc.nist.gov/pubs/sp/800/66/r2/final",
+        "include-controls": [
+          {
+            "with-ids": [
+              "164.308(a)(7)",
+              "164.312(a)(1)",
+              "164.312(a)(2)(iv)",
+              "164.312(b)",
+              "164.312(e)(1)"
+            ]
+          }
+        ]
+      }
+    ],
+    "merge": {
+      "as-is": true
+    }
+  }
+}
