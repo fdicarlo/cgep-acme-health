@@ -47,7 +47,7 @@ The GitHub Actions workflow runs the full HIPAA gate across all namespaces.
 
 ## Grading Evidence
 
-Recommended submission SHA: `260df8ee212073e165a536d33ee6b9e633015e7c`
+Submit the repo URL with the final commit SHA from `main`.
 
 Recent passing workflow run: <https://github.com/fdicarlo/cgep-acme-health/actions/runs/26498080213>
 

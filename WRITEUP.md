@@ -41,6 +41,8 @@ The GitHub Actions workflow `.github/workflows/grc-gate.yml` runs one integrated
 
 The workflow uses GitHub OIDC to assume an AWS role, avoiding long-lived AWS credentials in GitHub secrets.
 
+Because the capstone runner does not use shared remote Terraform state, repeated CI pushes can leave duplicate sandbox VPCs behind and exhaust the default five-VPC regional quota. The workflow now runs `scripts/cleanup-acme-vpcs.py` as a pre-flight step on pushes to `main`. The script removes only ACME Health VPCs and VPC-scoped dependencies before Terraform creates the next sandbox stack.
+
 ## Evidence
 
 Recent successful evidence run:
@@ -85,6 +87,7 @@ The GitHub deployment role is broader than a production least-privilege role. Fo
 - Add DynamoDB point-in-time recovery.
 - Split the evidence vault into a dedicated AWS account.
 - Add a script that verifies the latest S3 evidence object, checksum, Cosign bundle, and Object Lock retention in one command.
+- Replace the CI pre-flight cleanup pattern with durable remote Terraform state and import/migration of the current stack.
 - Validate OSCAL with `trestle` in CI.
 
 ## What I Did Not Get To

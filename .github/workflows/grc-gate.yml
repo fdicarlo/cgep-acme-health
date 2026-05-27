@@ -35,6 +35,14 @@ jobs:
           terraform_version: 1.6.6
           terraform_wrapper: false
 
+      - name: Pre-flight cleanup redundant ACME VPCs
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          python3 scripts/cleanup-acme-vpcs.py \
+            --region "${AWS_REGION}" \
+            --name-prefix acme-health-intake \
+            --yes
+
       - name: Install OPA + Conftest
         run: |
           curl -L -o conftest.tar.gz \
