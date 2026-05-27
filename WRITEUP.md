@@ -86,7 +86,7 @@ The GitHub Actions workflow `.github/workflows/grc-gate.yml` runs one integrated
 
 The workflow uses GitHub OIDC to assume an AWS role, avoiding long-lived AWS credentials in repository secrets.
 
-Because this capstone uses a sandbox without durable remote Terraform state, repeated main-branch runs can leave old Acme VPCs behind and exhaust the default five-VPC regional quota in `us-east-1`. To keep the capstone deployable, the workflow runs `scripts/cleanup-acme-vpcs.py` as a pre-flight step before plan/apply on `main`. The script is intentionally scoped to Acme Health VPCs and VPC-scoped dependencies. In production, I would replace this with remote state, state locking, and normal lifecycle management rather than cleanup before deploy.
+Because this capstone uses a sandbox without durable remote Terraform state, repeated main-branch runs can leave old Acme resources behind and exhaust regional quotas, especially VPC and CloudTrail limits in `us-east-1`. To keep the capstone deployable, the workflow runs `scripts/cleanup-acme-vpcs.py` as a pre-flight step before plan/apply on `main`. The script is intentionally scoped to Acme Health VPCs, matching Lambda functions, and matching CloudTrail trails. In production, I would replace this with remote state, state locking, and normal lifecycle management rather than cleanup before deploy.
 
 ## Layer 4: OSCAL Component
 
@@ -148,7 +148,7 @@ This demonstrates the intended behavior: compliant changes can merge, while a de
 
 ## Troubleshooting And Lessons Learned
 
-The most important implementation lesson was that compliance automation still depends on ordinary cloud operations hygiene. Without remote Terraform state, CI can create repeated sandbox stacks and hit AWS service quotas. The VPC cleanup script is a pragmatic capstone guardrail, not a production state strategy.
+The most important implementation lesson was that compliance automation still depends on ordinary cloud operations hygiene. Without remote Terraform state, CI can create repeated sandbox stacks and hit AWS service quotas. The pre-flight cleanup script is a pragmatic capstone guardrail, not a production state strategy.
 
 The Lambda VPC issue was another useful lesson. Moving Lambda into a VPC is not just a Terraform checkbox; private subnet placement also requires a path to AWS APIs. Otherwise a control can pass structurally while the workload fails at runtime. That is why this submission is honest about the current subnet choice and the next-step endpoint/NAT design.
 

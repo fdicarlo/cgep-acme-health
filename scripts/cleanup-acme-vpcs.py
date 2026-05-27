@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Delete stale ACME Health VPC stacks before CI creates a fresh sandbox stack.
+"""Delete stale ACME Health sandbox resources before CI creates a fresh stack.
 
 The capstone intentionally keeps Terraform small and local, so CI push runs can
-leave duplicate VPCs behind when state is not shared across runners. This
-pre-flight cleanup removes only VPCs that look like this workload, plus Lambda
+leave duplicate quota-limited resources behind when state is not shared across
+runners. This pre-flight cleanup removes only resources that look like this
+workload: CloudTrail trails with the workload prefix, matching VPCs, and Lambda
 functions with the workload prefix so Lambda-managed ENIs can drain.
 """
 
@@ -64,6 +65,14 @@ def delete_workload_lambdas(region, name_prefix):
         name = fn["FunctionName"]
         if name.startswith(f"{name_prefix}-handler-"):
             delete(region, "lambda", "delete-function", "--function-name", name, label=f"lambda {name}")
+
+
+def delete_cloudtrail_trails(region, name_prefix):
+    trails = aws_json(region, "cloudtrail", "list-trails")["Trails"]
+    for trail in trails:
+        name = trail["Name"]
+        if name.startswith(f"{name_prefix}-mgmt-"):
+            delete(region, "cloudtrail", "delete-trail", "--name", name, label=f"cloudtrail {name}")
 
 
 def cleanup_vpc(region, vpc_id):
@@ -187,8 +196,9 @@ def main():
     for vpc in vpcs:
         print(f"- {vpc['VpcId']} default={vpc.get('IsDefault')} name={tags(vpc).get('Name', '')}", flush=True)
 
+    delete_cloudtrail_trails(args.region, args.name_prefix)
     delete_workload_lambdas(args.region, args.name_prefix)
-    time.sleep(15)
+    time.sleep(60)
 
     for vpc in vpcs:
         cleanup_vpc(args.region, vpc["VpcId"])
