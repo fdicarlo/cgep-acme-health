@@ -65,12 +65,16 @@
             "implemented-requirements": [
               {
                 "uuid": "39a88c42-3868-4f7f-bc45-7124d58eae1b",
-                "control-id": "164.312(a)(2)(iv)",
+                "control-id": "hipaa-164.312-a-2-iv",
                 "description": "Encryption and decryption controls are implemented with a customer-managed AWS KMS key used by PHI-bearing S3 and DynamoDB resources. The evidence vault also uses the same customer-managed key for signed audit artifacts.",
                 "props": [
                   {
                     "name": "implementation-status",
                     "value": "implemented"
+                  },
+                  {
+                    "name": "hipaa-citation",
+                    "value": "164.312(a)(2)(iv)"
                   },
                   {
                     "name": "soc2-mapping",
@@ -115,12 +119,16 @@
               },
               {
                 "uuid": "cc29a04b-3fad-4bfd-9d6c-abdcf2c33cfb",
-                "control-id": "164.312(e)(1)",
+                "control-id": "hipaa-164.312-e-1",
                 "description": "Transmission security for S3 is enforced by bucket policies that deny any non-TLS request using aws:SecureTransport=false.",
                 "props": [
                   {
                     "name": "implementation-status",
                     "value": "implemented"
+                  },
+                  {
+                    "name": "hipaa-citation",
+                    "value": "164.312(e)(1)"
                   },
                   {
                     "name": "soc2-mapping",
@@ -149,12 +157,16 @@
               },
               {
                 "uuid": "c9f6c48f-834a-4d81-bb25-da07643e04dd",
-                "control-id": "164.308(a)(7)",
-                "description": "Contingency and recoverability controls are supported by S3 versioning on the PHI uploads bucket and immutable Object Lock retention on the deployment evidence vault.",
+                "control-id": "hipaa-164.308-a-7",
+                "description": "Contingency and recoverability controls are supported by S3 versioning on the PHI uploads bucket, DynamoDB point-in-time recovery on PHI records, and immutable Object Lock retention on the deployment evidence vault.",
                 "props": [
                   {
                     "name": "implementation-status",
                     "value": "implemented"
+                  },
+                  {
+                    "name": "hipaa-citation",
+                    "value": "164.308(a)(7)"
                   },
                   {
                     "name": "soc2-mapping",
@@ -163,6 +175,10 @@
                   {
                     "name": "terraform-resource",
                     "value": "aws_s3_bucket_versioning.uploads"
+                  },
+                  {
+                    "name": "terraform-resource",
+                    "value": "aws_dynamodb_table.intake.point_in_time_recovery"
                   },
                   {
                     "name": "terraform-resource",
@@ -175,6 +191,10 @@
                   {
                     "name": "policy",
                     "value": "policies/hipaa_s3_versioning.rego"
+                  },
+                  {
+                    "name": "policy",
+                    "value": "policies/hipaa_dynamodb_pitr.rego"
                   }
                 ],
                 "links": [
@@ -187,12 +207,16 @@
               },
               {
                 "uuid": "a2dc94bb-e91b-4b9a-a2af-9a7b424a2869",
-                "control-id": "164.312(a)(1)",
+                "control-id": "hipaa-164.312-a-1",
                 "description": "Access control for PHI data stores is implemented through a Lambda execution role with resource-scoped DynamoDB, S3, and KMS permissions and no wildcard service actions.",
                 "props": [
                   {
                     "name": "implementation-status",
                     "value": "implemented"
+                  },
+                  {
+                    "name": "hipaa-citation",
+                    "value": "164.312(a)(1)"
                   },
                   {
                     "name": "soc2-mapping",
@@ -225,12 +249,16 @@
               },
               {
                 "uuid": "0eb43332-2e15-4d8e-8deb-e0fe5a735d1f",
-                "control-id": "164.312(b)",
+                "control-id": "hipaa-164.312-b",
                 "description": "Audit controls are implemented through API Gateway access logging and CI/CD evidence capture. Signed bundles are retained in the Object Lock evidence vault.",
                 "props": [
                   {
                     "name": "implementation-status",
                     "value": "implemented"
+                  },
+                  {
+                    "name": "hipaa-citation",
+                    "value": "164.312(b)"
                   },
                   {
                     "name": "soc2-mapping",

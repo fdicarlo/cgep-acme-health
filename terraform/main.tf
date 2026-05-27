@@ -125,6 +125,10 @@ resource "aws_dynamodb_table" "intake" {
     enabled     = true
     kms_key_arn = module.grc_baseline.phi_kms_key_arn
   }
+
+  point_in_time_recovery {
+    enabled = true
+  }
 }
 
 ######################################################################

@@ -35,14 +35,6 @@ jobs:
           terraform_version: 1.6.6
           terraform_wrapper: false
 
-      - name: Pre-flight cleanup redundant ACME VPCs
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          python3 scripts/cleanup-acme-vpcs.py \
-            --region "${AWS_REGION}" \
-            --name-prefix acme-health-intake \
-            --yes
-
       - name: Install OPA + Conftest
         run: |
           curl -L -o conftest.tar.gz \
@@ -79,11 +71,18 @@ jobs:
         run: |
           opa test -v policies/
 
+      - name: Validate OSCAL
+        run: |
+          python -m pip install --user "compliance-trestle==3.6.0"
+          export PATH="$HOME/.local/bin:$PATH"
+          scripts/validate-oscal.sh
+
       - name: HIPAA policy gate
         run: |
           for ns in \
           compliance.hipaa.s3_kms \
           compliance.hipaa.dynamodb_kms \
+          compliance.hipaa.dynamodb_pitr \
           compliance.hipaa.s3_tls \
           compliance.hipaa.s3_versioning \
           compliance.hipaa.iam_least_privilege \

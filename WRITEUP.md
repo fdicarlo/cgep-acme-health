@@ -55,6 +55,7 @@ Implemented gap remediation:
 | GAP-02: DynamoDB uses AWS-owned/default encryption | `aws_dynamodb_table.intake` enables SSE with the baseline CMK. | `164.312(a)(2)(iv)` |
 | GAP-03: uploads bucket lacks TLS deny policy | `aws_s3_bucket_policy.uploads_tls` denies `aws:SecureTransport=false`. | `164.312(e)(1)` |
 | GAP-04: uploads bucket lacks versioning | `aws_s3_bucket_versioning.uploads` enables versioning. | `164.308(a)(7)` |
+| PHI record recovery | `aws_dynamodb_table.intake` enables point-in-time recovery. | `164.308(a)(7)` |
 | GAP-05: Lambda is outside the starter VPC | `aws_lambda_function.intake` includes `vpc_config` attached to the starter VPC subnets and Lambda security group. | `164.312(e)(1)` |
 | GAP-07: Lambda IAM is overbroad | `aws_iam_role_policy.lambda_inline` scopes DynamoDB, S3, and KMS actions to required operations and resources. | `164.312(a)(1)` |
 | GAP-08: API Gateway lacks logging/throttling | `aws_apigatewayv2_stage.default` enables access logging and route throttling. | `164.312(b)` |
@@ -63,10 +64,11 @@ The evidence vault is versioned, encrypted with SSE-KMS, protected by public-acc
 
 ## Layer 2: OPA Policy Suite
 
-The policy suite has six HIPAA policies, each with metadata, tests, failing fixtures, and deny messages that cite the relevant HIPAA control ID:
+The policy suite has seven HIPAA policies, each with metadata, tests, failing fixtures, and deny messages that cite the relevant HIPAA control ID:
 
 - `hipaa_s3_kms.rego`
 - `hipaa_dynamodb_kms.rego`
+- `hipaa_dynamodb_pitr.rego`
 - `hipaa_s3_tls.rego`
 - `hipaa_s3_versioning.rego`
 - `hipaa_iam_least_privilege.rego`
@@ -86,7 +88,7 @@ The GitHub Actions workflow `.github/workflows/grc-gate.yml` runs one integrated
 
 The workflow uses GitHub OIDC to assume an AWS role, avoiding long-lived AWS credentials in repository secrets.
 
-Because this capstone uses a sandbox without durable remote Terraform state, repeated main-branch runs can leave old Acme resources behind and exhaust regional quotas, especially VPC and CloudTrail limits in `us-east-1`. To keep the capstone deployable, the workflow runs `scripts/cleanup-acme-vpcs.py` as a pre-flight step before plan/apply on `main`. The script is intentionally scoped to Acme Health VPCs, matching Lambda functions, and matching CloudTrail trails. In production, I would replace this with remote state, state locking, and normal lifecycle management rather than cleanup before deploy.
+Terraform now uses an S3 backend with DynamoDB state locking. The backend is bootstrapped by `scripts/bootstrap-terraform-backend.sh` and configured in `terraform/backend.tf`. This replaces the earlier pre-flight cleanup pattern as the normal deployment path: CI reads and writes a shared state file instead of creating a fresh stack on every push. The cleanup script remains in the repo as a controlled recovery tool for stale sandbox resources, not as the main deployment mechanism.
 
 ## Layer 4: OSCAL Component
 
@@ -100,7 +102,7 @@ The OSCAL layer includes:
 - Evidence links to signed S3 evidence objects
 - A profile at `oscal/profiles/acme-health-hipaa-profile.json` selecting the implemented HIPAA controls
 
-I validated the OSCAL JSON structure locally with `jq`. I did not run full `trestle` validation locally because `trestle` was not installed in the workspace; adding that to CI is one of the follow-up items.
+The pipeline installs `compliance-trestle` and runs `scripts/validate-oscal.sh`, which stages the repo's OSCAL component and profile into Trestle's expected workspace layout before calling `trestle validate`. I still keep a lightweight `jq` parse in local verification because it is fast and catches obvious JSON mistakes before CI.
 
 ## Evidence Verification
 
@@ -121,6 +123,8 @@ Verification performed:
 - S3 object metadata shows `ServerSideEncryption = aws:kms`
 - S3 Object Lock retention is active in `GOVERNANCE` mode until `2026-06-26T10:42:15.284000+00:00`
 
+The repo now includes `scripts/verify-evidence.sh` so the grader or maintainer can repeat the evidence check in one command against the latest run prefix in the vault.
+
 ## Gate Evidence
 
 The repository history includes both required PR outcomes:
@@ -140,7 +144,7 @@ This demonstrates the intended behavior: compliant changes can merge, while a de
 
 **Single AWS account.** A separate evidence-vault account would provide stronger separation of duties and blast-radius reduction. For a 30-day capstone, a single account was acceptable and kept the end-to-end path easier to demonstrate.
 
-**Apply on merge to `main`.** I chose automatic apply on `main` because the capstone emphasizes integration: the gate plans, decides, applies, signs, and uploads evidence in one flow. A production environment might add a manual approval or environment protection rule after the policy gate.
+**Apply on merge to `main`.** I chose automatic apply on `main` because the capstone emphasizes integration: the gate plans, decides, applies, signs, and uploads evidence in one flow. Remote state and locking now make that model substantially safer than the earlier stateless runner pattern. A production environment might still add a manual approval or environment protection rule after the policy gate.
 
 **Lambda networking.** Lambda is attached to the starter VPC, satisfying the starter gap. It currently uses public subnets because private-subnet placement previously caused runtime connectivity failures. Lambda ENIs do not receive public IPs, so this is not the final network design I would choose for production. The next iteration should move Lambda to private subnets and add S3/DynamoDB VPC endpoints or NAT for AWS API access.
 
@@ -148,7 +152,7 @@ This demonstrates the intended behavior: compliant changes can merge, while a de
 
 ## Troubleshooting And Lessons Learned
 
-The most important implementation lesson was that compliance automation still depends on ordinary cloud operations hygiene. Without remote Terraform state, CI can create repeated sandbox stacks and hit AWS service quotas. The pre-flight cleanup script is a pragmatic capstone guardrail, not a production state strategy.
+The most important implementation lesson was that compliance automation still depends on ordinary cloud operations hygiene. Without remote Terraform state, CI created repeated sandbox stacks and hit AWS service quotas. The final design uses remote state and locking, while retaining the cleanup script as an explicit recovery tool for old sandbox leftovers.
 
 The Lambda VPC issue was another useful lesson. Moving Lambda into a VPC is not just a Terraform checkbox; private subnet placement also requires a path to AWS APIs. Otherwise a control can pass structurally while the workload fails at runtime. That is why this submission is honest about the current subnet choice and the next-step endpoint/NAT design.
 
@@ -158,12 +162,9 @@ The Rego policies also improved during the project. Initial versions were too pe
 
 - Move Lambda into private subnets with S3 and DynamoDB VPC endpoints.
 - Add WAF or an equivalent API protection layer if supported by the chosen API Gateway model.
-- Add DynamoDB point-in-time recovery and a corresponding policy check.
 - Split the evidence vault into a dedicated AWS account.
-- Replace pre-flight cleanup with remote Terraform state, locking, and a controlled import/migration path.
-- Add a verification script that checks the latest S3 evidence object, SHA-256, Cosign bundle, and Object Lock retention in one command.
-- Add `trestle` validation to CI for OSCAL.
-- Tighten the GitHub deployment role to the smallest practical Terraform permission set.
+- Add drift detection and alerting around remote Terraform state.
+- Move the GitHub deployment role policy into Terraform or an account-bootstrap stack.
 
 ## What I Did Not Get To
 
@@ -176,9 +177,9 @@ This submission does not claim full SOC 2 or CMMC implementation. It also does n
 | Repo is a clear derivative of the starter and keeps the workload runnable | Done |
 | Primary framework named in `WRITEUP.md` and OSCAL | Done |
 | Terraform adds KMS, evidence vault with Object Lock, CloudTrail, and hardening overrides | Done |
-| Five or more HIPAA Rego policies with tests | Done |
+| Five or more HIPAA Rego policies with tests | Done; seven policies are implemented |
 | Workflow runs Plan, Policy check, Apply, Sign, Upload | Done |
 | One green PR and one red PR visible in history | Done |
 | Signed evidence bundle in Object Lock vault | Done |
-| OSCAL component present | Done; JSON structure checked, full `trestle` validation still recommended |
+| OSCAL component present | Done; `trestle validate` is wired into CI |
 | README has grader verification instructions | Done |

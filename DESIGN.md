@@ -160,12 +160,12 @@ This is intentionally deferred so the current work can focus on baseline, eviden
 
 The workflow applies Terraform on pushes to `main`. This matches a simple capstone deployment model and makes evidence generation deterministic.
 
-The trade-off is operational risk. A production design would likely require environment protection rules, manual approval, drift detection, and separate plan/apply identities.
+The trade-off is operational risk. The final implementation uses an S3 backend and DynamoDB state locking to prevent each CI run from creating a fresh sandbox stack. A production design would still likely require environment protection rules, manual approval, drift detection, and separate plan/apply identities.
 
 ## Current Known Conditions
 
 - Terraform validation passes when run outside the local sandbox. The earlier provider error was caused by provider plugin IPC restrictions, not invalid Terraform.
-- The refreshed plan shows live AWS drift: the VPC, internet gateway, and public route table were deleted outside Terraform and would be recreated.
+- Terraform now uses remote S3 state with DynamoDB locking. The former pre-flight cleanup script remains available only as a recovery tool for stale sandbox resources.
 - Lambda private-subnet networking is deferred because it previously broke runtime behavior.
 - API authentication is out of scope for this capstone starter, but would be required before a real PHI-facing service.
 - CMMC is not claimed as an implemented framework in this submission.

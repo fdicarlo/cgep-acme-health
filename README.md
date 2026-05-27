@@ -34,6 +34,7 @@ make test AWS_PROFILE=<your-sandbox-profile>
 Run the policy checks against a fresh Terraform plan:
 
 ```bash
+scripts/bootstrap-terraform-backend.sh
 cd terraform
 terraform init -input=false
 terraform plan -out=tfplan -no-color
@@ -44,6 +45,12 @@ conftest test --policy policies --namespace compliance.hipaa.s3_kms terraform/pl
 ```
 
 The GitHub Actions workflow runs the full HIPAA gate across all namespaces.
+
+Verify the latest signed evidence object in S3:
+
+```bash
+scripts/verify-evidence.sh --vault <evidence-vault-bucket>
+```
 
 ## Grading Evidence
 
@@ -83,8 +90,10 @@ Verification facts:
 ├── oscal/components/
 ├── oscal/profiles/
 ├── policies/
+├── scripts/
 ├── terraform/
 │   ├── baseline/
+│   ├── backend.tf
 │   ├── lambda/handler.py
 │   ├── main.tf
 │   ├── moved.tf
