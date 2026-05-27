@@ -14,8 +14,42 @@ deny contains msg if {
 }
 
 has_tls_deny if {
+	cfg := uploads_policy_config
+	planned := planned_policy(cfg.address)
+	policy := json.unmarshal(planned.values.policy)
+	some stmt in object.get(policy, "Statement", [])
+	object.get(stmt, "Effect", "") == "Deny"
+	action_matches(object.get(stmt, "Action", []))
+	resource_matches(object.get(stmt, "Resource", []))
+	condition := object.get(stmt, "Condition", {})
+	bool_condition := object.get(condition, "Bool", {})
+	object.get(bool_condition, "aws:SecureTransport", "") == "false"
+}
+
+uploads_policy_config := r if {
 	some r in input.configuration.root_module.resources
 	r.type == "aws_s3_bucket_policy"
 	some ref in r.expressions.bucket.references
-	ref == "aws_s3_bucket.uploads.id"
+	references_uploads_bucket(ref)
+}
+
+planned_policy(addr) := r if {
+	some r in input.planned_values.root_module.resources
+	r.address == addr
+}
+
+references_uploads_bucket(ref) if ref == "aws_s3_bucket.uploads"
+references_uploads_bucket(ref) if ref == "aws_s3_bucket.uploads.id"
+references_uploads_bucket(ref) if ref == "aws_s3_bucket.uploads.bucket"
+
+action_matches(action) if action == "s3:*"
+action_matches(actions) if {
+	some action in actions
+	action == "s3:*"
+}
+
+resource_matches(resource) if contains(resource, "acme-health-intake-uploads")
+resource_matches(resources) if {
+	some resource in resources
+	contains(resource, "acme-health-intake-uploads")
 }

@@ -38,24 +38,14 @@ locals {
 }
 
 ######################################################################
-# KMS — customer managed key for PHI-bearing data stores.
-# Closes GAP-01 and GAP-02 by bringing S3 uploads and DynamoDB under
-# customer-controlled cryptographic custody.
+# GRC baseline — shared controls consumed by the workload.
 ######################################################################
 
-resource "aws_kms_key" "phi" {
-  description             = "CMK for Acme Health PHI workload"
-  deletion_window_in_days = 7
-  enable_key_rotation     = true
+module "grc_baseline" {
+  source = "./baseline"
 
-  tags = {
-    Name = "${local.name_prefix}-phi-key"
-  }
-}
-
-resource "aws_kms_alias" "phi" {
-  name          = "alias/${local.name_prefix}-phi-${local.suffix}"
-  target_key_id = aws_kms_key.phi.key_id
+  name_prefix = local.name_prefix
+  suffix      = local.suffix
 }
 
 ######################################################################
@@ -134,7 +124,7 @@ resource "aws_dynamodb_table" "intake" {
 
   server_side_encryption {
     enabled     = true
-    kms_key_arn = aws_kms_key.phi.arn
+    kms_key_arn = module.grc_baseline.phi_kms_key_arn
   }
 }
 
@@ -160,7 +150,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "uploads" {
 
   rule {
     apply_server_side_encryption_by_default {
-      kms_master_key_id = aws_kms_key.phi.arn
+      kms_master_key_id = module.grc_baseline.phi_kms_key_arn
       sse_algorithm     = "aws:kms"
     }
   }
@@ -275,7 +265,7 @@ resource "aws_iam_role_policy" "lambda_inline" {
           "kms:GenerateDataKey",
           "kms:DescribeKey"
         ]
-        Resource = aws_kms_key.phi.arn
+        Resource = module.grc_baseline.phi_kms_key_arn
       }
     ]
   })

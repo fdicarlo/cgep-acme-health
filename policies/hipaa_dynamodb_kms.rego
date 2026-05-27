@@ -14,7 +14,24 @@ deny contains msg if {
 }
 
 has_sse_kms if {
+	cfg := configured_table
+	cfg.expressions.server_side_encryption[0].kms_key_arn.references
+	some ref in cfg.expressions.server_side_encryption[0].kms_key_arn.references
+	is_customer_managed_key_ref(ref)
+
+	planned := planned_table
+	planned.values.server_side_encryption[0].enabled == true
+}
+
+configured_table := r if {
 	some r in input.configuration.root_module.resources
 	r.address == "aws_dynamodb_table.intake"
-	r.expressions.server_side_encryption
 }
+
+planned_table := r if {
+	some r in input.planned_values.root_module.resources
+	r.address == "aws_dynamodb_table.intake"
+}
+
+is_customer_managed_key_ref(ref) if contains(ref, "aws_kms_key.")
+is_customer_managed_key_ref(ref) if contains(ref, "phi_kms_key_arn")

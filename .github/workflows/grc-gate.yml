@@ -95,10 +95,9 @@ jobs:
         run: |
           terraform apply -auto-approve tfplan
 
-      - name: Bundle + sign + upload evidence
+      - name: Bundle + sign evidence
         if: always()
         env:
-          VAULT: ${{ vars.EVIDENCE_VAULT }}
           RUN_ID: ${{ github.run_id }}
           SHA: ${{ github.sha }}
         run: |
@@ -107,6 +106,8 @@ jobs:
           mkdir -p evidence
           cp terraform/plan.json evidence/plan.json
           cp terraform/plan.txt evidence/plan.txt || true
+          mkdir -p evidence/oscal
+          cp -R oscal/components evidence/oscal/ || true
 
           BUNDLE="evidence-${RUN_ID}-${SHA}.tar.gz"
           tar czf "${BUNDLE}" evidence/
@@ -115,7 +116,29 @@ jobs:
 
           cosign sign-blob --yes --bundle "${BUNDLE}.sig.bundle" "${BUNDLE}"
 
+          cp "${BUNDLE}" evidence/
+          cp "${BUNDLE}.sha256" evidence/
+          cp "${BUNDLE}.sig.bundle" evidence/
+
+      - name: Upload signed evidence to vault
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          VAULT_FALLBACK: ${{ vars.EVIDENCE_VAULT }}
+          RUN_ID: ${{ github.run_id }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          VAULT="$(terraform -chdir="${TF_WORKING_DIR}" output -raw evidence_vault_bucket 2>/dev/null || true)"
+          VAULT="${VAULT:-${VAULT_FALLBACK:-}}"
+
+          if [ -z "${VAULT}" ]; then
+            echo "No evidence vault available from Terraform output or EVIDENCE_VAULT variable." >&2
+            exit 1
+          fi
+
           KEY_PREFIX="runs/${RUN_ID}"
+          BUNDLE="evidence-${RUN_ID}-${SHA}.tar.gz"
 
           aws s3 cp "${BUNDLE}" "s3://${VAULT}/${KEY_PREFIX}/${BUNDLE}"
           aws s3 cp "${BUNDLE}.sha256" "s3://${VAULT}/${KEY_PREFIX}/${BUNDLE}.sha256"

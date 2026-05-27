@@ -24,3 +24,18 @@ output "vpc_id" {
 output "private_subnet_ids" {
   value = aws_subnet.private[*].id
 }
+
+output "evidence_vault_bucket" {
+  value       = module.grc_baseline.evidence_vault_bucket_name
+  description = "S3 bucket for signed CI/CD evidence bundles. Use this as the EVIDENCE_VAULT GitHub variable."
+}
+
+output "cloudtrail_name" {
+  value       = module.grc_baseline.cloudtrail_name
+  description = "Baseline CloudTrail management event trail."
+}
+
+output "cloudtrail_bucket" {
+  value       = module.grc_baseline.cloudtrail_bucket_name
+  description = "S3 bucket receiving CloudTrail management event logs."
+}
