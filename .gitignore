@@ -3,7 +3,10 @@
 *.tfstate
 *.tfstate.*
 *.tfplan
-.terraform.lock.hcl
+tfplan
+plan.txt
+terraform/plan.json
+terraform/lambda/*.zip
 
 # macOS
 .DS_Store

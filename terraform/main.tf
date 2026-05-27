@@ -1,9 +1,8 @@
 ######################################################################
-# Acme Health — Patient Intake API (CGE-P Capstone Starter)
+# Acme Health — Patient Intake API (CGE-P Capstone)
 #
-# This is the workload your capstone repo wraps with GRC controls.
-# It is INTENTIONALLY non-compliant. See GAPS.md for the named flaws
-# your Rego policies + Terraform overrides are expected to remediate.
+# This module owns the inherited workload resources. Shared governance
+# controls live in terraform/baseline and are consumed here by reference.
 ######################################################################
 
 terraform {
@@ -49,7 +48,7 @@ module "grc_baseline" {
 }
 
 ######################################################################
-# Networking — VPC the learner is expected to put the Lambda inside.
+# Networking — VPC foundation for the workload.
 # Two public + two private subnets across two AZs.
 ######################################################################
 
@@ -109,7 +108,7 @@ resource "aws_route_table_association" "public" {
 
 ######################################################################
 # DynamoDB — submissions table.
-# GAP-02: encryption uses AWS-owned default, not a CMK you control.
+# GAP-02 remediation: encryption uses the baseline customer-managed KMS key.
 ######################################################################
 
 resource "aws_dynamodb_table" "intake" {
@@ -130,15 +129,9 @@ resource "aws_dynamodb_table" "intake" {
 
 ######################################################################
 # S3 — uploads bucket.
-# GAP-01: relies on AWS-managed SSE-S3 (default since 2023) instead of
-#         SSE-KMS with a customer CMK. PHI keys are not under customer
-#         custody.
-# GAP-03: no bucket policy denying non-TLS requests
-#         (aws:SecureTransport).
-# GAP-04: no versioning. PHI overwrites are unrecoverable.
-#
-# Note: AWS now defaults new buckets to SSE-S3 + full public access block.
-# The "gaps" here are real residual gaps once those defaults are in place.
+# GAP-01 remediation: SSE-KMS with the baseline customer-managed KMS key.
+# GAP-03 remediation: bucket policy denies non-TLS requests.
+# GAP-04 remediation: versioning is enabled for recoverability.
 ######################################################################
 
 resource "aws_s3_bucket" "uploads" {
@@ -196,9 +189,9 @@ resource "aws_s3_bucket_policy" "uploads_tls" {
 
 ######################################################################
 # Lambda — the intake handler.
-# GAP-05: not deployed inside the VPC.
+# GAP-05 remediation: Lambda is configured with VPC networking.
 # GAP-06: no reserved concurrency, no DLQ, no X-Ray.
-# GAP-07: IAM role has dynamodb:* and s3:* on the resources (over-broad).
+# GAP-07 remediation: IAM policy is scoped to required data-store actions.
 ######################################################################
 
 data "archive_file" "handler" {
@@ -320,7 +313,8 @@ resource "aws_lambda_function" "intake" {
 
 ######################################################################
 # API Gateway — HTTP API in front of the Lambda.
-# GAP-08: no access logging, no throttling, no WAF.
+# GAP-08 remediation: access logging and throttling are enabled.
+# WAF remains a documented future enhancement.
 ######################################################################
 
 resource "aws_apigatewayv2_api" "intake" {
