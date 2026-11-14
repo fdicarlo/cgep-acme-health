@@ -1,5 +1,7 @@
 # cgep-acme-health
 
+[![Plumber Score](https://score.getplumber.io/github.com/fdicarlo/cgep-acme-health.svg)](https://score.getplumber.io/github.com/fdicarlo/cgep-acme-health)
+
 Patient Intake API for Acme Health, governed as a CGE-P compliance engineering capstone.
 
 ## What This Is

@@ -10,7 +10,6 @@ on:
 permissions:
   id-token: write
   contents: read
-  pull-requests: write
 
 env:
   AWS_REGION: us-east-1
@@ -21,16 +20,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.4.0
+        with:
+          persist-credentials: false
 
       - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v4.3.1
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v3.1.2
         with:
           terraform_version: 1.6.6
           terraform_wrapper: false
@@ -51,7 +52,7 @@ jobs:
 
       - name: Install Cosign
         if: always()
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@v3.9.1
         with:
           cosign-release: 'v2.2.4'
 
@@ -172,7 +173,7 @@ jobs:
 
       - name: Upload GitHub evidence artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: grc-evidence-${{ github.run_id }}
           path: evidence/
